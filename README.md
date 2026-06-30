@@ -6,6 +6,7 @@
 ![TensorFlow](https://img.shields.io/badge/TensorFlow-2.16%2B-orange?logo=tensorflow&logoColor=white)
 ![Keras](https://img.shields.io/badge/Keras-3.x-red?logo=keras&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Arayüz-FF4B4B?logo=streamlit&logoColor=white)
+![OpenCV](https://img.shields.io/badge/OpenCV-Güvenlik%20Katmanı-5C3EE8?logo=opencv&logoColor=white)
 ![XAI](https://img.shields.io/badge/XAI-Grad--CAM-9cf)
 ![Durum](https://img.shields.io/badge/Durum-Tamamlandı-success)
 
@@ -34,8 +35,9 @@
 3. [Model Mimarisi](#3--model-mimarisi)
 4. [Eğitim Süreci ve Optimizasyon](#4-️-eğitim-süreci-ve-optimizasyon)
 5. [Açıklanabilir Yapay Zeka (XAI) ve Grad-CAM Entegrasyonu](#5--açıklanabilir-yapay-zeka-xai-ve-grad-cam-entegrasyonu)
-6. [Kurulum ve Çalıştırma Talimatları](#6--kurulum-ve-çalıştırma-talimatları)
-7. [Sonuç ve Değerlendirme](#7--sonuç-ve-değerlendirme)
+6. [Endüstriyel Güvenlik Katmanı (Açık-Küme Güvenlik Ağı)](#6--endüstriyel-güvenlik-katmanı-açık-küme-güvenlik-ağı)
+7. [Kurulum ve Çalıştırma Talimatları](#7--kurulum-ve-çalıştırma-talimatları)
+8. [Sonuç ve Değerlendirme](#8--sonuç-ve-değerlendirme)
 
 ---
 
@@ -55,7 +57,7 @@ Bu endüstriyel senaryo, projenin en kritik mühendislik zorluğunu da ortaya ç
 | Muz 🍌 | Taze Muz 🍌 | Çürük Muz 🍌 |
 | Portakal 🍊 | Taze Portakal 🍊 | Çürük Portakal 🍊 |
 
-Projenin nihai çıktısı sadece bir sınıflandırma etiketi değildir; aynı zamanda **kararın nedenini görselleştiren** bir Açıklanabilir Yapay Zeka (XAI) katmanı içeren, Streamlit tabanlı interaktif bir web arayüzüdür.
+Projenin nihai çıktısı sadece bir sınıflandırma etiketi değildir; aynı zamanda **kararın nedenini görselleştiren** bir Açıklanabilir Yapay Zeka (XAI) katmanı ve gerçek dünya koşullarındaki hatalı girdilere karşı sistemi koruyan bir **Endüstriyel Güvenlik Katmanı** (bkz. Bölüm 6) içeren, Streamlit tabanlı interaktif bir web arayüzüdür.
 
 ---
 
@@ -75,7 +77,7 @@ Bölüm 1'de açıklanan "arka plan gürültüsü" problemini çözmek amacıyla
 | `RandomRotation` | `0.15` | Meyveler bant üzerinde her zaman dik durmaz; hafif dönüklük senaryoları simüle edilir. |
 | `RandomZoom` | `0.2` | Kameranın bant üzerindeki nesneye olan mesafesi (ve dolayısıyla görünür meyve boyutu) sabit değildir. |
 | `RandomContrast` | `0.2` | Paketleme hattındaki değişken aydınlatma (gölgeli/parlak bölgeler) koşullarına dayanıklılık sağlar. |
-| `RandomTranslation` | `0.1 / 0.1` | Meyvenin kamera karesinin merkezine tam hizalanmamış, kenarda kalmış görüntülerini simüle eder. |
+| `RandomTranslation` | `0.1 / 0.1` | Meyvenin kamera karesinin merkezine tam hizalanmamış, kenarda kalan görüntülerini simüle eder. |
 
 Bu katman, modelin bir parçası olarak (`.keras` formatında) kaydedilir; böylece eğitim mantığı dağıtım (deployment) aşamasına da taşınır ve ayrı bir ön-işleme adımına gerek kalmaz.
 
@@ -195,15 +197,63 @@ Sonuç, Streamlit arayüzünde kullanıcıya **kırmızı/sarı bölgelerin mode
 
 ---
 
-## 6. 🚀 Kurulum ve Çalıştırma Talimatları
+## 6. 🛡️ Endüstriyel Güvenlik Katmanı (Açık-Küme Güvenlik Ağı)
 
-### 6.1. Gereksinimler
+> **Bu bölüm, projeyi bir "ders ödevi prototipi"nden, gerçek dünya koşullarına dayanıklı bir "endüstriyel sistem"e dönüştüren katmanı anlatır.**
+
+### 6.1. Çözülen Temel Problem: Kapalı-Küme (Closed-World) Tuzağı
+
+Eğitilen model, 6 sınıflık **kapalı bir dünya (closed-world)** varsayımıyla çalışır; yani "bunların hiçbiri değil" diyebileceği bir çıkış nöronu **yoktur**. Softmax fonksiyonunun matematiksel doğası gereği, sisteme bir meyve değil de **dağılım-dışı (Out-of-Distribution / OOD)** bir görüntü — örneğin bir insan yüzü, el veya bir kurum logosu — verildiğinde dahi, olasılıkların toplamı 1'e normalize edilir ve model, gördüğü nesneyi **mecburen** en yakın bildiği dokuya yüksek bir güvenle yuvarlar. Bu, modelin bir "eğitim hatası" değil; tüm kapalı-küme sınıflandırıcıların **yapısal bir sınırlamasıdır**.
+
+Bu sınırlama, canlı bir kalite kontrol hattında ciddi bir güvenilirlik riski oluşturur: kameraya yanlışlıkla bir operatörün eli geçtiğinde, sistemin bunu "%100 Çürük Muz" olarak raporlaması kabul edilemez. Bu projede söz konusu risk, modeli yeniden eğitmeden, modelin çıktısını **bağımsız olarak denetleyen** çok katmanlı bir güvenlik ağı ile yönetilmiştir.
+
+### 6.2. Çok Katmanlı Savunma Mimarisi
+
+Güvenlik ağı, "**gerçek bir meyve asla yanlışlıkla reddedilmemeli, ancak meyve olmayan hiçbir nesne de sınıflandırılmamalı**" tasarım önceliğiyle, dört bağımsız kontrolden oluşur. Bu kontrollerin hiçbiri modelin ağırlıklarını değiştirmez; tamamı modelin çıktısını ve ham görüntüyü ek bir denetim katmanından geçirir.
+
+| # | Katman | Teknik | Görevi |
+|---|---|---|---|
+| 1 | **Ana Savunma** | OpenCV Haar Cascade (yapısal yüz tespiti) | Görüntüde insan yüzü varsa, modelin tahminine **hiç bakmadan** işlemi durdurur. |
+| 2 | **İkincil Yedek** | YCrCb cilt tonu filtresi (yüksek eşik) | Yüz dedektörünün kaçırdığı aşırı durumlarda devreye giren, renk tabanlı bir yedek. |
+| 3 | **Güven Kilidi** | Confidence Threshold (%65) | Modelin en yüksek güveni düşükse, "kararsız" durumunu yakalar. |
+| 4 | **Marj Kilidi** | Top-1 / Top-2 Margin (%15) | İki en olası sınıf birbirine çok yakınsa, modelin salınımını yakalar. |
+
+#### 🥇 Katman 1 — Ana Savunma: Yapısal Yüz Tespiti (Haar Cascade)
+
+Güvenlik ağının birincil ve en güçlü hattı, OpenCV ile birlikte hazır gelen klasik **Haar Cascade** yüz dedektörüdür. Bu katmanın seçilmesinin ardındaki mühendislik gerekçesi kritik öneme sahiptir: **renk tabanlı yöntemler, sıcak insan teni tonu ile sarı/kahverengi (örn. çürük muz) meyve tonlarını birbirinden güvenilir şekilde ayıramaz.** Buna karşılık Haar Cascade, görüntünün rengine değil, **yapısal desenine** (göz-burun-ağız geometrisine) bakar.
+
+Bu yaklaşımın doğrudan sonucu şudur: dedektör yalnızca **gerçekten bir yüz yapısı** gördüğünde tetiklenir ve bir meyveyi — rengi ne olursa olsun — **asla "yüz" sanmaz**. Bu özellik, "gerçek meyveyi asla yanlışlıkla reddetme" önceliğiyle birebir örtüşür ve bu katmanı, yanlış pozitif riski neredeyse sıfır olan en güvenli OOD filtresi yapar. Sistem; hem önden bakan yüzleri (`frontalface`) hem de hafif yan profilleri (`profileface`, ayna simetrisiyle birlikte) tarar.
+
+#### 🥈 Katman 2 — İkincil Yedek: YCrCb Cilt Tonu Filtresi
+
+Yüz dedektörünün zor açılarda (aşırı yakın, kısmen görünen yüz veya yalnızca el) bir yüzü kaçırma ihtimaline karşı, modelden bağımsız ikinci bir güvenlik ağı eklenmiştir. Bu filtre, görüntüyü **YCrCb renk uzayına** çevirir (cilt tonu için HSV'den daha dar ve güvenilir bir aralık sunar) ve görüntüdeki en büyük **bitişik (connected component)** cilt-tonu bölgesinin oranını hesaplar.
+
+"Gerçek meyveyi asla reddetme" önceliği gereği bu filtrenin eşiği **bilerek çok yüksek (%60)** tutulmuştur: yalnızca kare neredeyse tamamen tek parça bir cilt tonuyla kaplandığında devreye girer. Bu sayede sarı muz, turuncu veya kahverengi çürük portakal gibi gerçek meyveler bu yedek filtre tarafından **yanlışlıkla reddedilmez**. Tek piksellik gürültüyü temizlemek için ayrıca morfolojik açma (opening) işlemi uygulanır.
+
+#### 🥉 Katman 3 ve 4 — Güven ve Marj Kilitleri
+
+Görüntü bir yüz/cilt içermese bile, model gerçek bir meyve karşısında dahi kararsız kalabilir (örneğin renk yanlılığı nedeniyle bir sınıf ile diğeri arasında bölünmesi). Bu durumları yakalamak için iki istatistiksel kilit eklenmiştir:
+
+- **Güven Kilidi (%65):** Modelin en yüksek tahmin olasılığı bu eşiğin altındaysa, sonuç gösterilmez. %50 civarı bir skor, sınıflar arası neredeyse "yazı-tura" anlamına gelir.
+- **Marj Kilidi (%15):** En yüksek iki olasılık arasındaki fark bu eşiğin altındaysa (örn. %42'ye karşı %38), model iki sınıf arasında salınıyor demektir; bu da düşük güvenilirlik sinyali olarak değerlendirilir.
+
+### 6.3. Şeffaflık: Hata Ayıklama Paneli
+
+Bir görüntü herhangi bir güvenlik kontrolünden geçemediğinde, kullanıcıya kırmızı bir teknik hata yerine **nazik ve eğitici bir uyarı** gösterilir (örn. "Görüntüde bir insan yüzü tespit edildi; lütfen kameraya yalnızca meyveyi gösterin"). Bu uyarının altında, açılabilir bir **teknik detay paneli** yer alır; bu panel, tespit edilen yüz durumunu, modelin ham güven skorunu, top-1/top-2 marjını ve cilt tonu oranını şeffaf biçimde gösterir. Bu, sistemin kararlarını gizlemek yerine **açıklanabilir kılan**, XAI felsefesiyle tutarlı bir tasarım tercihidir.
+
+---
+
+## 7. 🚀 Kurulum ve Çalıştırma Talimatları
+
+### 7.1. Gereksinimler
 
 ```bash
 pip install tensorflow streamlit opencv-python pillow numpy
 ```
 
-### 6.2. Klasör Yapısı
+> **Not:** Güvenlik katmanındaki Haar Cascade yüz dedektörü için gerekli model dosyaları (`haarcascade_frontalface_default.xml`, `haarcascade_profileface.xml`) `opencv-python` paketiyle birlikte **otomatik olarak** gelir; ayrı bir indirme gerektirmez.
+
+### 7.2. Klasör Yapısı
 
 ```
 proje-klasoru/
@@ -211,13 +261,13 @@ proje-klasoru/
 │   └── dataset/
 │       ├── train/   # Her sınıf için bir alt klasör
 │       └── val/
-├── cnn_egitim.py        # Model eğitim betiği
-├── cnn_arayuz.py         # Streamlit XAI arayüzü
-├── en_iyi_meyve_modeli.keras       # Eğitim sonucu otomatik oluşur
+├── cnn_egitim.py             # Model eğitim betiği
+├── cnn_arayuz.py              # Streamlit XAI + Güvenlik Katmanı arayüzü
+├── en_iyi_meyve_modeli.keras  # Eğitim sonucu otomatik oluşur
 └── README.md
 ```
 
-### 6.3. Adım Adım Çalıştırma
+### 7.3. Adım Adım Çalıştırma
 
 **1. Modeli eğitin:**
 
@@ -233,13 +283,23 @@ Eğitim tamamlandığında en iyi doğrulama performansına sahip model `en_iyi_
 streamlit run cnn_arayuz.py
 ```
 
-**3. Tarayıcınızda açılan adrese gidin** (varsayılan olarak `http://localhost:8501`), bir meyve fotoğrafı yükleyin ve sonucu Grad-CAM ısı haritasıyla birlikte görüntüleyin.
+**3. Tarayıcınızda açılan adrese gidin** (varsayılan olarak `http://localhost:8501`). Arayüz iki çalışma modu sunar:
+- **📁 Fotoğraf Yükle:** Diskten bir meyve fotoğrafı seçin.
+- **📷 Kameradan Çek:** Canlı kamera ile anlık fotoğraf çekin.
+
+Her iki modda da sistem; meyveyi sınıflandırır, Grad-CAM ısı haritasını üretir ve sonucu güvenlik katmanından geçirerek gösterir.
 
 ---
 
-## 7. 📌 Sonuç ve Değerlendirme
+## 8. 📌 Sonuç ve Değerlendirme
 
-Bu proje kapsamında, sadece yüksek doğruluklu (%99.77 doğrulama doğruluğu) bir sınıflandırma modeli değil; aynı zamanda **endüstriyel gerçekçilik** (arka plan gürültüsüne dayanıklılık), **mühendislik disiplini** (otomatik, metriğe dayalı eğitim durdurma mekanizmaları) ve **şeffaflık** (Grad-CAM ile açıklanabilirlik) ilkelerini bir araya getiren uçtan uca bir sistem geliştirilmiştir. `EarlyStopping`, `ModelCheckpoint` ve `ReduceLROnPlateau` mekanizmalarının epoch 30-36-44 aralığında gösterdiği etkileşim, modelin keyfi bir epoch sayısıyla değil, **kendi öğrenme eğrisinin veriye dayalı analiziyle** sonlandırıldığını kanıtlamaktadır.
+Bu proje kapsamında, sadece yüksek doğruluklu (%99.77 doğrulama doğruluğu) bir sınıflandırma modeli değil; aynı zamanda **endüstriyel gerçekçilik** (arka plan gürültüsüne dayanıklılık), **mühendislik disiplini** (otomatik, metriğe dayalı eğitim durdurma mekanizmaları), **şeffaflık** (Grad-CAM ile açıklanabilirlik) ve **gerçek dünya dayanıklılığı** (çok katmanlı açık-küme güvenlik ağı) ilkelerini bir araya getiren uçtan uca bir sistem geliştirilmiştir.
+
+`EarlyStopping`, `ModelCheckpoint` ve `ReduceLROnPlateau` mekanizmalarının epoch 30-36-44 aralığında gösterdiği etkileşim, modelin keyfi bir epoch sayısıyla değil, **kendi öğrenme eğrisinin veriye dayalı analiziyle** sonlandırıldığını kanıtlamaktadır. Bölüm 6'da anlatılan güvenlik katmanı ise, modelin kapalı-küme yapısal sınırlamasının farkında olunduğunu ve bu sınırlamanın sistem seviyesinde profesyonelce yönetildiğini göstermektedir — ki bu, akademik bir prototipi gerçek bir mühendislik ürününden ayıran temel farktır.
+
+### 8.1. Bilinen Sınırlamalar ve Gelecek Çalışmalar
+
+Sistem, tekil ve net görüntülerde yüksek başarı sergilemekle birlikte, mevcut modelin **renk yanlılığı (color bias)** taşıdığı gözlemlenmiştir; bu, modelin "şekil" yerine "renk" özelliklerine ağırlık verdiği eğitim verisinin bir sonucudur. Gelecek çalışmalarda; (1) sınıflar arası renk dengesi gözetilmiş, daha büyük ve çeşitli bir veri seti, (2) transfer öğrenme (MobileNet/EfficientNet gibi önceden eğitilmiş omurgalar) ve (3) sahnedeki meyveleri önce tespit edip kırpan bir YOLO ön-aşaması ile beslenen hibrit bir mimari hedeflenmektedir. Bu iyileştirmeler, mevcut güçlü güvenlik altyapısı korunarak modelin sınıflandırma çekirdeğini güçlendirecektir.
 
 ---
 
